@@ -1,6 +1,6 @@
 {
   "author": ["YourName"],
-  "install_msg": "Thanks for installing KeywordReply. Edit the cog to add your channel IDs and trigger words.",
+  "install_msg": "Thanks for installing KeywordReply. Use [p]keywordreply commands in Discord to set channels, trigger words, and replies.",
   "name": "KeywordReply",
   "short": "Reply to keywords in selected channels",
   "description": "A Red Discord bot cog that replies when certain words appear in configured channels.",
