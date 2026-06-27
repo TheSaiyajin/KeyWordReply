@@ -25,7 +25,6 @@ class KeywordReply(commands.Cog):
         for keyword, response in triggers.items():
             if keyword in content:
                 await message.reply(response, mention_author=False)
-                break
 
     @commands.group(name="keywordreply", aliases=["kr"])
     @commands.guild_only()
