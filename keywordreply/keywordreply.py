@@ -164,5 +164,5 @@ class KeywordReply(commands.Cog):
         await ctx.send(f"Triggers for {channel.mention}:\n" + "\n".join(lines))
 
 
-def setup(bot):
-    bot.add_cog(KeywordReply(bot))
+async def setup(bot):
+    await bot.add_cog(KeywordReply(bot))
