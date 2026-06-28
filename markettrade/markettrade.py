@@ -22,6 +22,11 @@ class MarketTrade(commands.Cog):
                     "min_price": 100.0,
                     "max_price": 100000.0,
                     "volatility": 0.08,
+                    "risk": 1.2,
+                    "momentum": 0.68,
+                    "reversal_accel": 0.08,
+                    "trend": 0,
+                    "trend_streak": 0,
                 },
                 "ETH": {
                     "name": "Ethereum",
@@ -30,6 +35,11 @@ class MarketTrade(commands.Cog):
                     "min_price": 50.0,
                     "max_price": 50000.0,
                     "volatility": 0.08,
+                    "risk": 1.15,
+                    "momentum": 0.66,
+                    "reversal_accel": 0.08,
+                    "trend": 0,
+                    "trend_streak": 0,
                 },
                 "AAPL": {
                     "name": "Apple",
@@ -38,6 +48,11 @@ class MarketTrade(commands.Cog):
                     "min_price": 10.0,
                     "max_price": 10000.0,
                     "volatility": 0.05,
+                    "risk": 1.0,
+                    "momentum": 0.58,
+                    "reversal_accel": 0.09,
+                    "trend": 0,
+                    "trend_streak": 0,
                 },
             },
             update_interval_minutes=10,
@@ -53,6 +68,22 @@ class MarketTrade(commands.Cog):
     def _normalize_symbol(symbol: str) -> str:
         return symbol.strip().upper()
 
+    @staticmethod
+    def _default_asset_behavior(kind: str):
+        if kind == "crypto":
+            return {
+                "volatility": 0.08,
+                "risk": 1.2,
+                "momentum": 0.68,
+                "reversal_accel": 0.08,
+            }
+        return {
+            "volatility": 0.05,
+            "risk": 1.0,
+            "momentum": 0.58,
+            "reversal_accel": 0.09,
+        }
+
     async def _update_guild_prices(self, guild_id: int):
         guild_conf = self.config.guild_from_id(guild_id)
         assets = await guild_conf.assets()
@@ -64,15 +95,43 @@ class MarketTrade(commands.Cog):
         for symbol, asset in assets.items():
             current_price = float(asset["price"])
             volatility = float(asset.get("volatility", 0.08))
+            risk = max(0.2, float(asset.get("risk", 1.0)))
+            momentum = min(0.95, max(0.05, float(asset.get("momentum", 0.6))))
+            reversal_accel = min(0.5, max(0.01, float(asset.get("reversal_accel", 0.08))))
             min_price = max(1.0, float(asset.get("min_price", 1.0)))
             max_price = max(min_price, float(asset.get("max_price", min_price)))
+            trend = int(asset.get("trend", 0))
+            trend_streak = max(0, int(asset.get("trend_streak", 0)))
 
-            change = random.uniform(-volatility, volatility)
+            if trend == 0:
+                trend = random.choice((-1, 1))
+                trend_streak = 0
+            else:
+                continue_chance = max(0.05, momentum - (trend_streak * reversal_accel))
+                if random.random() > continue_chance:
+                    trend *= -1
+                    trend_streak = 0
+
+            directional_move = random.uniform(volatility * 0.25, volatility) * risk
+            if trend_streak >= 2:
+                directional_move *= 1.0 + min(0.45, trend_streak * 0.08)
+
+            noise = random.uniform(-volatility * 0.15, volatility * 0.15)
+            change = (directional_move * trend) + noise
+            if change * trend < 0:
+                change = trend * abs(change) * 0.35
+
             new_price = current_price * (1.0 + change)
             clamped_price = max(min_price, min(max_price, new_price))
 
             updated_asset = dict(asset)
             updated_asset["price"] = round(clamped_price, 2)
+            if clamped_price in (min_price, max_price):
+                updated_asset["trend"] = trend * -1
+                updated_asset["trend_streak"] = 0
+            else:
+                updated_asset["trend"] = trend
+                updated_asset["trend_streak"] = trend_streak + 1
             updated_assets[symbol] = updated_asset
 
         await guild_conf.assets.set(updated_assets)
@@ -110,8 +169,11 @@ class MarketTrade(commands.Cog):
 
         lines = []
         for symbol, asset in sorted(assets.items()):
+            trend = int(asset.get("trend", 0))
+            trend_icon = "↗️" if trend > 0 else "↘️" if trend < 0 else "➡️"
             lines.append(
-                f"- `{symbol}` ({asset['kind']}) {asset['name']}: {humanize_number(asset['price'])} credits"
+                f"- `{symbol}` ({asset['kind']}) {asset['name']}: "
+                f"{humanize_number(asset['price'])} credits {trend_icon}"
             )
         await ctx.send("Current prices:\n" + "\n".join(lines))
 
@@ -254,7 +316,7 @@ class MarketTrade(commands.Cog):
 
         min_price = max(1.0, round(starting_price * 0.05, 2))
         max_price = round(starting_price * 20, 2)
-        volatility = 0.08 if normalized_kind == "crypto" else 0.05
+        defaults = self._default_asset_behavior(normalized_kind)
 
         async with self.config.guild(ctx.guild).assets() as assets:
             if normalized_symbol in assets:
@@ -267,7 +329,12 @@ class MarketTrade(commands.Cog):
                 "price": round(starting_price, 2),
                 "min_price": min_price,
                 "max_price": max_price,
-                "volatility": volatility,
+                "volatility": defaults["volatility"],
+                "risk": defaults["risk"],
+                "momentum": defaults["momentum"],
+                "reversal_accel": defaults["reversal_accel"],
+                "trend": 0,
+                "trend_streak": 0,
             }
 
         await ctx.send(
@@ -298,10 +365,14 @@ class MarketTrade(commands.Cog):
         lines = []
         for symbol, asset in sorted(assets.items()):
             volatility_percent = round(float(asset.get("volatility", 0.0)) * 100, 2)
+            risk = round(float(asset.get("risk", 1.0)), 2)
+            momentum_percent = round(float(asset.get("momentum", 0.6)) * 100, 1)
             lines.append(
                 f"- `{symbol}` ({asset['kind']}) {asset['name']}: "
                 f"price={humanize_number(asset['price'])}, "
-                f"volatility={volatility_percent}%"
+                f"volatility={volatility_percent}%, "
+                f"risk={risk}x, "
+                f"momentum={momentum_percent}%"
             )
         await ctx.send("Assets:\n" + "\n".join(lines))
 
@@ -342,6 +413,42 @@ class MarketTrade(commands.Cog):
             assets[normalized_symbol] = asset
 
         await ctx.send(f"`{normalized_symbol}` volatility set to {round(percent, 2)}%.")
+
+    @market_asset.command(name="setrisk")
+    async def market_asset_setrisk(self, ctx, symbol: str, risk: float):
+        """Set directional movement multiplier (higher = riskier trends)."""
+        normalized_symbol = self._normalize_symbol(symbol)
+        if risk < 0.2 or risk > 5:
+            await ctx.send("Risk must be between 0.2 and 5.")
+            return
+
+        async with self.config.guild(ctx.guild).assets() as assets:
+            asset = assets.get(normalized_symbol)
+            if asset is None:
+                await ctx.send(f"`{normalized_symbol}` does not exist.")
+                return
+            asset["risk"] = round(risk, 2)
+            assets[normalized_symbol] = asset
+
+        await ctx.send(f"`{normalized_symbol}` risk set to {round(risk, 2)}x.")
+
+    @market_asset.command(name="setmomentum")
+    async def market_asset_setmomentum(self, ctx, symbol: str, percent: float):
+        """Set trend continuation chance. Higher means dips/pumps last longer."""
+        normalized_symbol = self._normalize_symbol(symbol)
+        if percent <= 0 or percent >= 100:
+            await ctx.send("Momentum percent must be greater than 0 and less than 100.")
+            return
+
+        async with self.config.guild(ctx.guild).assets() as assets:
+            asset = assets.get(normalized_symbol)
+            if asset is None:
+                await ctx.send(f"`{normalized_symbol}` does not exist.")
+                return
+            asset["momentum"] = round(percent / 100, 4)
+            assets[normalized_symbol] = asset
+
+        await ctx.send(f"`{normalized_symbol}` momentum set to {round(percent, 2)}%.")
 
 
 async def setup(bot):
