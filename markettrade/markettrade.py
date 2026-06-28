@@ -183,6 +183,52 @@ class MarketTrade(commands.Cog):
             "bull_bias": 0.05,
         }
 
+    def _behavior_profile(self, kind: str, profile: str):
+        defaults = self._default_asset_behavior(kind)
+        profiles = {
+            "stable": {
+                "volatility": 0.035 if kind == "stock" else 0.05,
+                "risk": 0.9 if kind == "stock" else 1.0,
+                "momentum": 0.55,
+                "reversal_accel": 0.1,
+                "drift": 0.0004 if kind == "stock" else 0.0007,
+                "bull_bias": 0.04,
+            },
+            "wild": {
+                "volatility": 0.085 if kind == "stock" else 0.12,
+                "risk": 1.3 if kind == "stock" else 1.55,
+                "momentum": 0.7,
+                "reversal_accel": 0.07,
+                "drift": 0.0008 if kind == "stock" else 0.0012,
+                "bull_bias": 0.06,
+            },
+            "uptrend": {
+                "volatility": defaults["volatility"],
+                "risk": defaults["risk"],
+                "momentum": min(0.9, defaults["momentum"] + 0.05),
+                "reversal_accel": defaults["reversal_accel"],
+                "drift": defaults["drift"] + 0.0008,
+                "bull_bias": min(0.3, defaults["bull_bias"] + 0.08),
+            },
+            "downtrend": {
+                "volatility": defaults["volatility"],
+                "risk": defaults["risk"],
+                "momentum": min(0.9, defaults["momentum"] + 0.02),
+                "reversal_accel": defaults["reversal_accel"],
+                "drift": defaults["drift"] - 0.0012,
+                "bull_bias": max(-0.3, defaults["bull_bias"] - 0.16),
+            },
+            "swing": {
+                "volatility": 0.06 if kind == "stock" else 0.095,
+                "risk": 1.2 if kind == "stock" else 1.35,
+                "momentum": 0.52,
+                "reversal_accel": 0.14,
+                "drift": 0.0,
+                "bull_bias": 0.0,
+            },
+        }
+        return profiles.get(profile)
+
     async def _update_guild_prices(self, guild_id: int):
         await self._ensure_guild_initialized(guild_id)
         guild_conf = self.config.guild_from_id(guild_id)
@@ -620,6 +666,62 @@ class MarketTrade(commands.Cog):
                 f"bull_bias={bull_bias_percent}%"
             )
         await ctx.send("Assets:\n" + "\n".join(lines))
+
+    @market_asset.command(name="profiles")
+    async def market_asset_profiles(self, ctx):
+        """Show available behavior profiles for setprofile."""
+        await ctx.send(
+            "Available profiles: `stable`, `wild`, `uptrend`, `downtrend`, `swing`.\n"
+            "Use: `market asset setprofile <symbol> <profile>`"
+        )
+
+    @market_asset.command(name="setprofile")
+    async def market_asset_setprofile(self, ctx, symbol: str, profile: str):
+        """Apply a predefined behavior profile to an asset."""
+        await self._ensure_guild_initialized(ctx.guild.id)
+        normalized_symbol = self._normalize_symbol(symbol)
+        normalized_profile = profile.strip().lower()
+        profile_aliases = {
+            "wilder": "wild",
+            "volatile": "wild",
+            "up": "uptrend",
+            "ups": "uptrend",
+            "dip": "downtrend",
+            "dips": "downtrend",
+            "down": "downtrend",
+        }
+        normalized_profile = profile_aliases.get(normalized_profile, normalized_profile)
+
+        async with self.config.guild(ctx.guild).assets() as assets:
+            asset = assets.get(normalized_symbol)
+            if asset is None:
+                await ctx.send(f"`{normalized_symbol}` does not exist.")
+                return
+
+            kind = str(asset.get("kind", "stock")).strip().lower()
+            selected = self._behavior_profile(kind, normalized_profile)
+            if selected is None:
+                await ctx.send(
+                    "Unknown profile. Use one of: `stable`, `wild`, `uptrend`, `downtrend`, `swing`."
+                )
+                return
+
+            asset["volatility"] = round(float(selected["volatility"]), 4)
+            asset["risk"] = round(float(selected["risk"]), 2)
+            asset["momentum"] = round(float(selected["momentum"]), 4)
+            asset["reversal_accel"] = round(float(selected["reversal_accel"]), 4)
+            asset["drift"] = round(float(selected["drift"]), 4)
+            asset["bull_bias"] = round(float(selected["bull_bias"]), 4)
+            assets[normalized_symbol] = asset
+
+        await ctx.send(
+            f"`{normalized_symbol}` profile set to `{normalized_profile}` "
+            f"(volatility={round(selected['volatility'] * 100, 2)}%, "
+            f"risk={round(selected['risk'], 2)}x, "
+            f"momentum={round(selected['momentum'] * 100, 1)}%, "
+            f"drift={round(selected['drift'] * 100, 2)}%, "
+            f"bull_bias={round(selected['bull_bias'] * 100, 2)}%)."
+        )
 
     @market_asset.command(name="setprice")
     async def market_asset_setprice(self, ctx, symbol: str, new_price: float):
