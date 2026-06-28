@@ -1,7 +1,7 @@
 {
   "author": ["YourName"],
-  "install_msg": "Thanks for installing KeywordReply. Use [p]keywordreply commands in Discord to set channels, trigger words, and replies.",
-  "name": "KeywordReply",
+  "install_msg": "Thanks for installing SaiReply. Use [p]saireply commands in Discord to set channels, trigger words, and replies.",
+  "name": "SaiReply",
   "short": "Reply to keywords in selected channels",
   "description": "A Red Discord bot cog that replies when certain words appear in configured channels.",
   "tags": ["utility", "fun"],

@@ -2,7 +2,7 @@ import discord
 from redbot.core import Config, commands
 
 
-class KeywordReply(commands.Cog):
+class SaiReply(commands.Cog):
     """Reply when specific words appear in selected channels."""
 
     def __init__(self, bot):
@@ -26,22 +26,22 @@ class KeywordReply(commands.Cog):
             if keyword in content:
                 await message.reply(response, mention_author=False)
 
-    @commands.group(name="keywordreply", aliases=["kr"])
+    @commands.group(name="saireply", aliases=["keywordreply", "kr", "sai"])
     @commands.guild_only()
     @commands.admin_or_permissions(manage_guild=True)
-    async def keywordreply_group(self, ctx):
+    async def saireply_group(self, ctx):
         """Manage keyword reply channels and trigger words."""
         if ctx.invoked_subcommand is None:
             await ctx.send_help()
 
-    @keywordreply_group.group(name="channel")
-    async def keywordreply_channel_group(self, ctx):
+    @saireply_group.group(name="channel")
+    async def saireply_channel_group(self, ctx):
         """Manage channels where keyword replies are enabled."""
         if ctx.invoked_subcommand is None:
             await ctx.send_help()
 
-    @keywordreply_channel_group.command(name="add")
-    async def keywordreply_channel_add(self, ctx, channel: discord.TextChannel):
+    @saireply_channel_group.command(name="add")
+    async def saireply_channel_add(self, ctx, channel: discord.TextChannel):
         """Enable keyword replies in a channel."""
         channel_key = str(channel.id)
 
@@ -53,8 +53,8 @@ class KeywordReply(commands.Cog):
 
         await ctx.send(f"Enabled keyword replies in {channel.mention}.")
 
-    @keywordreply_channel_group.command(name="remove")
-    async def keywordreply_channel_remove(self, ctx, channel: discord.TextChannel):
+    @saireply_channel_group.command(name="remove")
+    async def saireply_channel_remove(self, ctx, channel: discord.TextChannel):
         """Disable keyword replies in a channel."""
         channel_key = str(channel.id)
 
@@ -66,8 +66,8 @@ class KeywordReply(commands.Cog):
 
         await ctx.send(f"Disabled keyword replies in {channel.mention}.")
 
-    @keywordreply_channel_group.command(name="list")
-    async def keywordreply_channel_list(self, ctx):
+    @saireply_channel_group.command(name="list")
+    async def saireply_channel_list(self, ctx):
         """List channels where keyword replies are enabled."""
         channels = await self.config.guild(ctx.guild).channels()
         if not channels:
@@ -83,14 +83,14 @@ class KeywordReply(commands.Cog):
 
         await ctx.send("Enabled channels:\n" + "\n".join(lines))
 
-    @keywordreply_group.group(name="trigger", aliases=["word", "keyword"])
-    async def keywordreply_trigger_group(self, ctx):
+    @saireply_group.group(name="trigger", aliases=["word", "keyword"])
+    async def saireply_trigger_group(self, ctx):
         """Manage trigger words and replies for a channel."""
         if ctx.invoked_subcommand is None:
             await ctx.send_help()
 
-    @keywordreply_trigger_group.command(name="add")
-    async def keywordreply_trigger_add(
+    @saireply_trigger_group.command(name="add")
+    async def saireply_trigger_add(
         self,
         ctx,
         channel: discord.TextChannel,
@@ -118,8 +118,8 @@ class KeywordReply(commands.Cog):
         else:
             await ctx.send(f"Added `{normalized_keyword}` in {channel.mention}.")
 
-    @keywordreply_trigger_group.command(name="remove", aliases=["delete", "del"])
-    async def keywordreply_trigger_remove(self, ctx, channel: discord.TextChannel, keyword: str):
+    @saireply_trigger_group.command(name="remove", aliases=["delete", "del"])
+    async def saireply_trigger_remove(self, ctx, channel: discord.TextChannel, keyword: str):
         """Remove a trigger word from a channel."""
         normalized_keyword = keyword.strip().lower()
         if not normalized_keyword:
@@ -148,8 +148,8 @@ class KeywordReply(commands.Cog):
 
         await ctx.send(f"Removed `{normalized_keyword}` from {channel.mention}.")
 
-    @keywordreply_trigger_group.command(name="list")
-    async def keywordreply_trigger_list(self, ctx, channel: discord.TextChannel):
+    @saireply_trigger_group.command(name="list")
+    async def saireply_trigger_list(self, ctx, channel: discord.TextChannel):
         """List trigger words configured for a channel."""
         channels = await self.config.guild(ctx.guild).channels()
         channel_key = str(channel.id)
@@ -164,4 +164,4 @@ class KeywordReply(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(KeywordReply(bot))
+    await bot.add_cog(SaiReply(bot))

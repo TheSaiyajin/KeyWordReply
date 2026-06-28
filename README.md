@@ -1,7 +1,7 @@
 # Red Cogs
 
 This repository contains Red Discord bot cogs:
-- `keywordreply`: replies when specific words appear in selected channels.
+- `saireply`: replies when specific words appear in selected channels.
 - `markettrade`: fake crypto/stock trading game using Red bank credits.
 
 ## Features
@@ -10,24 +10,24 @@ This repository contains Red Discord bot cogs:
 - Replies when configured keywords are found
 
 ## Setup
-1. Put the folder named `keywordreply` into your Red bot's `cogs` directory.
+1. Put the folder named `saireply` into your Red bot's `cogs` directory.
 2. Load the cog with:
-   - `[p]load keywordreply`
+   - `[p]load saireply`
 3. Configure channels and words with commands in Discord.
 
 ## Install from GitHub
 Once this repo is pushed to GitHub, you can install it in Red with:
 
 - `[p]cog install <your-github-repo-url>`
-- `[p]load keywordreply`
+- `[p]load saireply`
 
 ## Commands
-- `[p]keywordreply channel add #channel`
-- `[p]keywordreply channel remove #channel`
-- `[p]keywordreply channel list`
-- `[p]keywordreply trigger add #channel keyword your reply text`
-- `[p]keywordreply trigger remove #channel keyword`
-- `[p]keywordreply trigger list #channel`
+- `[p]saireply channel add #channel`
+- `[p]saireply channel remove #channel`
+- `[p]saireply channel list`
+- `[p]saireply trigger add #channel keyword your reply text`
+- `[p]saireply trigger remove #channel keyword`
+- `[p]saireply trigger list #channel`
 
 ## MarketTrade Setup
 1. Install and load:
