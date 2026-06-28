@@ -245,7 +245,7 @@ class MarketTrade(commands.Cog):
     async def before_price_updater(self):
         await self.bot.wait_until_red_ready()
 
-    @commands.group()
+    @commands.group(case_insensitive=True)
     @commands.guild_only()
     async def market(self, ctx):
         """Fake market game commands."""
@@ -513,7 +513,7 @@ class MarketTrade(commands.Cog):
         )
         await ctx.send("Live prices message created. I will update it every market interval.")
 
-    @market.group(name="asset")
+    @market.group(name="asset", case_insensitive=True)
     @commands.admin_or_permissions(manage_guild=True)
     async def market_asset(self, ctx):
         """Manage assets in this server."""
