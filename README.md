@@ -28,6 +28,7 @@ Once this repo is pushed to GitHub, you can install it in Red with:
 - `[p]saireply trigger add #channel keyword your reply text`
 - `[p]saireply trigger remove #channel keyword`
 - `[p]saireply trigger list #channel`
+- `[p]saireply trigger all` (or `listall`)
 
 ## MarketTrade Setup
 1. Install and load:

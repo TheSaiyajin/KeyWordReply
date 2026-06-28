@@ -1,5 +1,6 @@
 import discord
 from redbot.core import Config, commands
+from redbot.core.utils.chat_formatting import pagify
 
 
 class SaiReply(commands.Cog):
@@ -161,6 +162,32 @@ class SaiReply(commands.Cog):
 
         lines = [f"- `{keyword}` -> {response}" for keyword, response in sorted(triggers.items())]
         await ctx.send(f"Triggers for {channel.mention}:\n" + "\n".join(lines))
+
+    @saireply_trigger_group.command(name="all", aliases=["listall"])
+    async def saireply_trigger_all(self, ctx):
+        """List all trigger words and replies across enabled channels."""
+        channels = await self.config.guild(ctx.guild).channels()
+        if not channels:
+            await ctx.send("No channels are enabled yet.")
+            return
+
+        lines = []
+        for channel_id in sorted(channels.keys(), key=int):
+            channel_obj = ctx.guild.get_channel(int(channel_id))
+            channel_name = channel_obj.mention if channel_obj else f"`{channel_id}` (not found)"
+            triggers = channels[channel_id]
+
+            if not triggers:
+                lines.append(f"{channel_name}\n- (no triggers)")
+                continue
+
+            lines.append(channel_name)
+            for keyword, response in sorted(triggers.items()):
+                lines.append(f"- `{keyword}` -> {response}")
+
+        output = "All configured triggers:\n" + "\n".join(lines)
+        for page in pagify(output, delims=["\n"], page_length=1900):
+            await ctx.send(page)
 
 
 async def setup(bot):
