@@ -381,7 +381,8 @@ class MarketTrade(commands.Cog):
 
                    elif order_type == "sell":
                        if current_price >= target_price:
-                           owned_amount = int(holdings.get(symbol, 0))
+                           current_holdings = await member_conf.holdings()
+                           owned_amount = int(current_holdings.get(symbol, 0))
                            quantity_to_sell = owned_amount if quantity == -1 else quantity
                            if owned_amount >= quantity_to_sell and quantity_to_sell > 0:
                                async with member_conf.holdings() as hld, member_conf.cost_basis() as cb, member_conf.realized_profit() as rp:
