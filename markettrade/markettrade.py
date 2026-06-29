@@ -522,7 +522,9 @@ class MarketTrade(commands.Cog):
            try:
                interval_minutes = int(data.get("update_interval_minutes", 10))
                last_update_ts = float(data.get("last_update_ts", 0.0))
-               if now - last_update_ts >= interval_minutes * 60:
+               time_since_update = now - last_update_ts
+                
+               if time_since_update >= interval_minutes * 60:
                    parsed_guild_id = int(guild_id)
                    await self._process_auto_orders(parsed_guild_id)
                    await self._update_guild_prices(parsed_guild_id)
@@ -1125,6 +1127,26 @@ class MarketTrade(commands.Cog):
             await ctx.send(f"❌ Error during price update: {e}")
             import traceback
             traceback.print_exc()
+
+    @market.command(name="debug")
+    @commands.admin_or_permissions(manage_guild=True)
+    async def market_debug(self, ctx):
+        """Show debug info about price update timing."""
+        import time
+        guild_conf = self.config.guild(ctx.guild)
+        interval_minutes = await guild_conf.update_interval_minutes()
+        last_update_ts = await guild_conf.last_update_ts()
+        now = time.time()
+        time_since = now - last_update_ts
+        
+        await ctx.send(
+            f"**Update Debug Info:**\n"
+            f"Interval: {interval_minutes} minutes ({interval_minutes * 60} seconds)\n"
+            f"Last update: {last_update_ts}\n"
+            f"Now: {now}\n"
+            f"Time since last update: {time_since:.1f} seconds\n"
+            f"Ready for update: {time_since >= interval_minutes * 60}"
+        )
 
     @market.command(name="liveprices")
     @commands.admin_or_permissions(manage_guild=True)
