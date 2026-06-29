@@ -324,13 +324,17 @@ class MarketTrade(commands.Cog):
         """Debug version of _process_auto_orders that returns detailed info."""
         debug_lines = []
         try:
+            guild = self.bot.get_guild(guild_id)
+            if guild is None:
+                return ["Guild not found"]
+            
             guild_conf = self.config.guild_from_id(guild_id)
             assets = await guild_conf.assets()
             
             if not assets:
                 return ["No assets configured"]
             
-            all_members = await self.config.all_members(guild_id)
+            all_members = await self.config.all_members(guild)
             if not all_members:
                 return ["No members found"]
             
@@ -398,17 +402,17 @@ class MarketTrade(commands.Cog):
     async def _process_auto_orders(self, guild_id: int):
         """Process all auto-buy and auto-sell orders for all members in the guild."""
         try:
+            guild = self.bot.get_guild(guild_id)
+            if guild is None:
+                return
+            
             guild_conf = self.config.guild_from_id(guild_id)
             assets = await guild_conf.assets()
             if not assets:
                 return
 
-            all_members = await self.config.all_members(guild_id)
+            all_members = await self.config.all_members(guild)
             if not all_members:
-                return
-
-            guild = self.bot.get_guild(guild_id)
-            if guild is None:
                 return
 
             print(f"[Auto-Orders] Processing {len(all_members)} members, {len(assets)} assets: {list(assets.keys())}")
