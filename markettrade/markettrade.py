@@ -284,50 +284,50 @@ class MarketTrade(commands.Cog):
                 "bull_bias": 0.0,
             },
         }
-       return profiles.get(profile)
-
+        return profiles.get(profile)
+
     def _detect_asset_profile(self, kind: str, asset: dict) -> str:
-       """Detect which profile an asset matches, or return 'custom' if none match."""
-       asset_volatility = round(float(asset.get("volatility", 0.0)), 4)
-       asset_risk = round(float(asset.get("risk", 1.0)), 2)
-       asset_momentum = round(float(asset.get("momentum", 0.6)), 4)
-       asset_reversal_accel = round(float(asset.get("reversal_accel", 0.08)), 4)
-       asset_drift = round(float(asset.get("drift", 0.0)), 4)
-       asset_bull_bias = round(float(asset.get("bull_bias", 0.05)), 4)
+        """Detect which profile an asset matches, or return 'custom' if none match."""
+        asset_volatility = round(float(asset.get("volatility", 0.0)), 4)
+        asset_risk = round(float(asset.get("risk", 1.0)), 2)
+        asset_momentum = round(float(asset.get("momentum", 0.6)), 4)
+        asset_reversal_accel = round(float(asset.get("reversal_accel", 0.08)), 4)
+        asset_drift = round(float(asset.get("drift", 0.0)), 4)
+        asset_bull_bias = round(float(asset.get("bull_bias", 0.05)), 4)
 
-       for profile_name in ["stable", "wild", "uptrend", "downtrend", "swing"]:
-           profile_data = self._behavior_profile(kind, profile_name)
-           if profile_data is None:
-               continue
+        for profile_name in ["stable", "wild", "uptrend", "downtrend", "swing"]:
+            profile_data = self._behavior_profile(kind, profile_name)
+            if profile_data is None:
+                continue
 
-           prof_volatility = round(float(profile_data.get("volatility", 0.0)), 4)
-           prof_risk = round(float(profile_data.get("risk", 1.0)), 2)
-           prof_momentum = round(float(profile_data.get("momentum", 0.6)), 4)
-           prof_reversal_accel = round(float(profile_data.get("reversal_accel", 0.08)), 4)
-           prof_drift = round(float(profile_data.get("drift", 0.0)), 4)
-           prof_bull_bias = round(float(profile_data.get("bull_bias", 0.05)), 4)
+            prof_volatility = round(float(profile_data.get("volatility", 0.0)), 4)
+            prof_risk = round(float(profile_data.get("risk", 1.0)), 2)
+            prof_momentum = round(float(profile_data.get("momentum", 0.6)), 4)
+            prof_reversal_accel = round(float(profile_data.get("reversal_accel", 0.08)), 4)
+            prof_drift = round(float(profile_data.get("drift", 0.0)), 4)
+            prof_bull_bias = round(float(profile_data.get("bull_bias", 0.05)), 4)
 
-           if (
-               asset_volatility == prof_volatility
-               and asset_risk == prof_risk
-               and asset_momentum == prof_momentum
-               and asset_reversal_accel == prof_reversal_accel
-               and asset_drift == prof_drift
-               and asset_bull_bias == prof_bull_bias
-           ):
-               return profile_name
+            if (
+                asset_volatility == prof_volatility
+                and asset_risk == prof_risk
+                and asset_momentum == prof_momentum
+                and asset_reversal_accel == prof_reversal_accel
+                and asset_drift == prof_drift
+                and asset_bull_bias == prof_bull_bias
+            ):
+                return profile_name
 
-       return "custom"
+        return "custom"
 
     async def _process_auto_orders(self, guild_id: int):
-       """Process all auto-buy and auto-sell orders for all members in the guild."""
-       guild_conf = self.config.guild_from_id(guild_id)
-       assets = await guild_conf.assets()
-       if not assets:
-           return
+        """Process all auto-buy and auto-sell orders for all members in the guild."""
+        guild_conf = self.config.guild_from_id(guild_id)
+        assets = await guild_conf.assets()
+        if not assets:
+            return
 
-       all_members = await self.config.all_members(guild_id)
-       guild = self.bot.get_guild(guild_id)
+        all_members = await self.config.all_members(guild_id)
+        guild = self.bot.get_guild(guild_id)
        if guild is None:
            return
 
