@@ -1,0 +1,13 @@
+{
+  "author": ["YourName"],
+  "install_msg": "Thanks for installing SaiCasino! Use [p]blackjack to play. Bet your Red credits!",
+  "name": "SaiCasino",
+  "short": "Play blackjack with Red bank credits",
+  "description": "A Red Discord bot cog for playing blackjack in a single message with button interactions. Bet and win Red bank credits!",
+  "tags": ["casino", "game", "blackjack", "gambling", "economy"],
+  "requirements": [],
+  "min_bot_version": "3.5.0",
+  "hidden": false,
+  "disabled": false,
+  "end_user_data_statement": "This cog does not store any persistent user data beyond temporary game states which are discarded after game completion."
+}
