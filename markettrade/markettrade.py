@@ -486,6 +486,10 @@ class MarketTrade(commands.Cog):
                             quantity_to_sell = owned_amount if quantity == -1 else quantity
                             print(f"[Auto-Orders] SELL CHECK: owned={owned_amount}, to_sell={quantity_to_sell}, price_condition={current_price >= target_price}")
                             if owned_amount >= quantity_to_sell and quantity_to_sell > 0:
+                                total_gain = int(round(current_price * quantity_to_sell))
+                                if total_gain <= 0:
+                                    total_gain = 1
+                                
                                 async with member_conf.holdings() as hld, member_conf.cost_basis() as cb, member_conf.realized_profit() as rp:
                                     current_amount = int(hld.get(symbol, 0))
                                     avg_buy_price = float(cb.get(symbol, current_price))
@@ -497,15 +501,20 @@ class MarketTrade(commands.Cog):
                                         del hld[symbol]
                                         if symbol in cb:
                                             del cb[symbol]
-                                    total_gain = int(round(current_price * quantity_to_sell))
-                                    if total_gain <= 0:
-                                        total_gain = 1
+                                
+                                # Deposit credits OUTSIDE the context manager to ensure it persists
+                                try:
                                     await bank.deposit_credits(member, total_gain)
+                                    print(f"[Auto-Orders] Deposited {total_gain} credits to {member}")
+                                except Exception as e:
+                                    print(f"[Auto-Orders] ERROR depositing credits: {e}")
+                                    execution_log.append(f"ERROR SELL {symbol}: Failed to deposit {total_gain} credits - {e}")
+                                
                                 del auto_orders[order_id]
-                                execution_log.append(f"SELL: {quantity_to_sell} {symbol} @ {current_price}")
+                                execution_log.append(f"SELL: {quantity_to_sell} {symbol} @ {current_price} = {total_gain} credits")
                                 print(f"[Auto-Orders] SELL EXECUTED: {quantity_to_sell} {symbol} at {current_price}")
                                 try:
-                                    profit_loss = realized_change
+                                    profit_loss = int(round((current_price - float(cb.get(symbol, current_price))) * quantity_to_sell)) if symbol in cb else total_gain
                                     profit_loss_text = f"+{humanize_number(profit_loss)}" if profit_loss > 0 else f"{humanize_number(profit_loss)}"
                                     await member.send(
                                         f"✅ **Auto-Sell Order Executed!**\n"
