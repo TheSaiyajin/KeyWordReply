@@ -378,6 +378,14 @@ class MarketTrade(commands.Cog):
                                    total_cost_basis = (current_amount * current_avg_price) + (quantity * current_price)
                                    cb[symbol] = round(total_cost_basis / new_amount, 4)
                            del auto_orders[order_id]
+                           try:
+                               await member.send(
+                                   f"✅ **Auto-Buy Order Executed!**\n"
+                                   f"Bought {quantity} `{symbol}` at {humanize_number(round(current_price, 2))} credits each\n"
+                                   f"Total cost: {humanize_number(total_cost)} credits"
+                               )
+                           except (discord.Forbidden, discord.HTTPException):
+                               pass
 
                    elif order_type == "sell":
                        if current_price >= target_price:
@@ -401,6 +409,17 @@ class MarketTrade(commands.Cog):
                                        total_gain = 1
                                    await bank.deposit_credits(member, total_gain)
                                del auto_orders[order_id]
+                               try:
+                                   profit_loss = realized_change
+                                   profit_loss_text = f"+{humanize_number(profit_loss)}" if profit_loss > 0 else f"{humanize_number(profit_loss)}"
+                                   await member.send(
+                                       f"✅ **Auto-Sell Order Executed!**\n"
+                                       f"Sold {quantity_to_sell} `{symbol}` at {humanize_number(round(current_price, 2))} credits each\n"
+                                       f"Total gain: {humanize_number(total_gain)} credits\n"
+                                       f"Profit/Loss: {profit_loss_text} credits"
+                                   )
+                               except (discord.Forbidden, discord.HTTPException):
+                                   pass
                            else:
                                print(f"Sell order not executed: {symbol} owned={owned_amount}, need to sell={quantity_to_sell}")
 
