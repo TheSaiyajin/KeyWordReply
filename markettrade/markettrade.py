@@ -26,7 +26,7 @@ class MarketTrade(commands.Cog):
             random_event_chance_percent=6.0,
             event_announce_channel_id=0,
         )
-        self.config.register_member(holdings={}, cost_basis={}, realized_profit={})
+        self.config.register_member(holdings={}, cost_basis={}, realized_profit={}, auto_orders={})
         self.price_updater.start()
 
     def cog_unload(self):
@@ -319,6 +319,94 @@ class MarketTrade(commands.Cog):
 
        return "custom"
 
+    async def _process_auto_orders(self, guild_id: int):
+       """Process all auto-buy and auto-sell orders for all members in the guild."""
+       guild_conf = self.config.guild_from_id(guild_id)
+       assets = await guild_conf.assets()
+       if not assets:
+           return
+
+       all_members = await self.config.all_members(guild_id)
+       guild = self.bot.get_guild(guild_id)
+       if guild is None:
+           return
+
+       for member_id, member_data in all_members.items():
+           auto_orders = member_data.get("auto_orders", {})
+           if not auto_orders:
+               continue
+
+           try:
+               member = await self.bot.fetch_user(member_id)
+           except discord.NotFound:
+               continue
+
+           member_conf = self.config.member_from_ids(guild_id, member_id)
+           holdings = await member_conf.holdings()
+           cost_basis = await member_conf.cost_basis()
+
+           for order_id, order in list(auto_orders.items()):
+               order_type = order.get("type")
+               symbol = order.get("symbol", "").upper()
+               target_price = float(order.get("target_price", 0))
+               quantity = int(order.get("quantity", 0))
+
+               if symbol not in assets or target_price <= 0 or quantity <= 0:
+                   continue
+
+               asset = assets[symbol]
+               current_price = float(asset.get("price", 0))
+
+               if order_type == "buy":
+                   if current_price <= target_price:
+                       total_cost = int(round(current_price * quantity))
+                       if total_cost <= 0:
+                           total_cost = 1
+
+                       if not await bank.can_spend(member, total_cost):
+                           continue
+
+                       await bank.withdraw_credits(member, total_cost)
+
+                       async with member_conf.holdings() as hld, member_conf.cost_basis() as cb:
+                           current_amount = int(hld.get(symbol, 0))
+                           current_avg_price = float(cb.get(symbol, current_price))
+                           new_amount = current_amount + quantity
+                           hld[symbol] = new_amount
+
+                           if new_amount > 0:
+                               total_cost_basis = (current_amount * current_avg_price) + (quantity * current_price)
+                               cb[symbol] = round(total_cost_basis / new_amount, 4)
+
+                       del auto_orders[order_id]
+
+               elif order_type == "sell":
+                   if current_price >= target_price:
+                       owned_amount = int(holdings.get(symbol, 0))
+                       if owned_amount >= quantity:
+                           async with member_conf.holdings() as hld, member_conf.cost_basis() as cb, member_conf.realized_profit() as rp:
+                               current_amount = int(hld.get(symbol, 0))
+                               avg_buy_price = float(cb.get(symbol, current_price))
+                               realized_change = int(round((current_price - avg_buy_price) * quantity))
+                               previous_realized = int(rp.get(symbol, 0))
+                               rp[symbol] = previous_realized + realized_change
+
+                               hld[symbol] = current_amount - quantity
+                               if hld[symbol] == 0:
+                                   del hld[symbol]
+                                   if symbol in cb:
+                                       del cb[symbol]
+
+                               total_gain = int(round(current_price * quantity))
+                               if total_gain <= 0:
+                                   total_gain = 1
+
+                               await bank.deposit_credits(member, total_gain)
+
+                           del auto_orders[order_id]
+
+           await member_conf.auto_orders.set(auto_orders)
+
     async def _update_guild_prices(self, guild_id: int):
         await self._ensure_guild_initialized(guild_id)
         guild_conf = self.config.guild_from_id(guild_id)
@@ -436,6 +524,7 @@ class MarketTrade(commands.Cog):
             if now - last_update_ts >= interval_minutes * 60:
                 parsed_guild_id = int(guild_id)
                 await self._update_guild_prices(parsed_guild_id)
+                await self._process_auto_orders(parsed_guild_id)
                 await self._update_live_prices_message(parsed_guild_id)
 
     @price_updater.before_loop
@@ -707,6 +796,164 @@ class MarketTrade(commands.Cog):
             + f"\nTotal unrealized P/L: {humanize_number(total_unrealized)} credits"
             + f"\nTotal realized P/L: {humanize_number(total_realized)} credits"
         )
+
+    @market.group(name="autobuy", case_insensitive=True)
+    async def market_autobuy(self, ctx):
+        """Manage auto-buy orders that execute when price drops to target."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help()
+
+    @market_autobuy.command(name="set")
+    async def market_autobuy_set(self, ctx, symbol: str, target_price: float, quantity: int):
+        """Set an auto-buy order. Buys when price drops to or below target."""
+        if quantity <= 0:
+            await ctx.send("Quantity must be at least 1.")
+            return
+        if target_price <= 0:
+            await ctx.send("Target price must be greater than 0.")
+            return
+
+        normalized_symbol = self._normalize_symbol(symbol)
+        assets = await self._get_assets(ctx.guild)
+        asset = assets.get(normalized_symbol)
+        if asset is None:
+            await ctx.send(f"Asset `{normalized_symbol}` does not exist.")
+            return
+
+        order_id = f"{normalized_symbol}_{ctx.author.id}_{int(time.time() * 1000) % 10000}"
+        member_conf = self.config.member(ctx.author)
+        async with member_conf.auto_orders() as orders:
+            orders[order_id] = {
+                "type": "buy",
+                "symbol": normalized_symbol,
+                "target_price": round(target_price, 2),
+                "quantity": quantity,
+            }
+
+        await ctx.send(
+            f"Auto-buy order set: Buy {quantity} `{normalized_symbol}` when price drops to {humanize_number(round(target_price, 2))} credits."
+        )
+
+    @market_autobuy.command(name="list")
+    async def market_autobuy_list(self, ctx):
+        """List all your active auto-buy orders."""
+        member_conf = self.config.member(ctx.author)
+        auto_orders = await member_conf.auto_orders()
+
+        buy_orders = [order for order in auto_orders.values() if order.get("type") == "buy"]
+        if not buy_orders:
+            await ctx.send("You have no active auto-buy orders.")
+            return
+
+        lines = []
+        for order in buy_orders:
+            symbol = order.get("symbol", "?")
+            target_price = float(order.get("target_price", 0))
+            quantity = int(order.get("quantity", 0))
+            lines.append(f"- `{symbol}`: {quantity} units @ {humanize_number(round(target_price, 2))} credits")
+
+        await ctx.send("Your auto-buy orders:\n" + "\n".join(lines))
+
+    @market_autobuy.command(name="remove")
+    async def market_autobuy_remove(self, ctx, symbol: str):
+        """Remove all auto-buy orders for a symbol."""
+        normalized_symbol = self._normalize_symbol(symbol)
+        member_conf = self.config.member(ctx.author)
+
+        async with member_conf.auto_orders() as orders:
+            removed = False
+            for order_id in list(orders.keys()):
+                if orders[order_id].get("symbol") == normalized_symbol and orders[order_id].get("type") == "buy":
+                    del orders[order_id]
+                    removed = True
+
+            if not removed:
+                await ctx.send(f"You have no auto-buy orders for `{normalized_symbol}`.")
+                return
+
+        await ctx.send(f"Removed all auto-buy orders for `{normalized_symbol}`.")
+
+    @market.group(name="autosell", case_insensitive=True)
+    async def market_autosell(self, ctx):
+        """Manage auto-sell orders that execute when price rises to target."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help()
+
+    @market_autosell.command(name="set")
+    async def market_autosell_set(self, ctx, symbol: str, target_price: float, quantity: int):
+        """Set an auto-sell order. Sells when price rises to or above target."""
+        if quantity <= 0:
+            await ctx.send("Quantity must be at least 1.")
+            return
+        if target_price <= 0:
+            await ctx.send("Target price must be greater than 0.")
+            return
+
+        normalized_symbol = self._normalize_symbol(symbol)
+        assets = await self._get_assets(ctx.guild)
+        asset = assets.get(normalized_symbol)
+        if asset is None:
+            await ctx.send(f"Asset `{normalized_symbol}` does not exist.")
+            return
+
+        member_conf = self.config.member(ctx.author)
+        holdings = await member_conf.holdings()
+        owned_amount = int(holdings.get(normalized_symbol, 0))
+        if owned_amount < quantity:
+            await ctx.send(f"You only own {owned_amount} `{normalized_symbol}` but trying to sell {quantity}.")
+            return
+
+        order_id = f"{normalized_symbol}_{ctx.author.id}_{int(time.time() * 1000) % 10000}"
+        async with member_conf.auto_orders() as orders:
+            orders[order_id] = {
+                "type": "sell",
+                "symbol": normalized_symbol,
+                "target_price": round(target_price, 2),
+                "quantity": quantity,
+            }
+
+        await ctx.send(
+            f"Auto-sell order set: Sell {quantity} `{normalized_symbol}` when price rises to {humanize_number(round(target_price, 2))} credits."
+        )
+
+    @market_autosell.command(name="list")
+    async def market_autosell_list(self, ctx):
+        """List all your active auto-sell orders."""
+        member_conf = self.config.member(ctx.author)
+        auto_orders = await member_conf.auto_orders()
+
+        sell_orders = [order for order in auto_orders.values() if order.get("type") == "sell"]
+        if not sell_orders:
+            await ctx.send("You have no active auto-sell orders.")
+            return
+
+        lines = []
+        for order in sell_orders:
+            symbol = order.get("symbol", "?")
+            target_price = float(order.get("target_price", 0))
+            quantity = int(order.get("quantity", 0))
+            lines.append(f"- `{symbol}`: {quantity} units @ {humanize_number(round(target_price, 2))} credits")
+
+        await ctx.send("Your auto-sell orders:\n" + "\n".join(lines))
+
+    @market_autosell.command(name="remove")
+    async def market_autosell_remove(self, ctx, symbol: str):
+        """Remove all auto-sell orders for a symbol."""
+        normalized_symbol = self._normalize_symbol(symbol)
+        member_conf = self.config.member(ctx.author)
+
+        async with member_conf.auto_orders() as orders:
+            removed = False
+            for order_id in list(orders.keys()):
+                if orders[order_id].get("symbol") == normalized_symbol and orders[order_id].get("type") == "sell":
+                    del orders[order_id]
+                    removed = True
+
+            if not removed:
+                await ctx.send(f"You have no auto-sell orders for `{normalized_symbol}`.")
+                return
+
+        await ctx.send(f"Removed all auto-sell orders for `{normalized_symbol}`.")
 
     @market.command(name="graph")
     async def market_graph(self, ctx, symbol: str, points: int = 20):
