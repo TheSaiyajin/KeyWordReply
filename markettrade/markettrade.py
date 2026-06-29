@@ -401,6 +401,8 @@ class MarketTrade(commands.Cog):
                                        total_gain = 1
                                    await bank.deposit_credits(member, total_gain)
                                del auto_orders[order_id]
+                           else:
+                               print(f"Sell order not executed: {symbol} owned={owned_amount}, need to sell={quantity_to_sell}")
 
                await member_conf.auto_orders.set(auto_orders)
         except Exception as e:
