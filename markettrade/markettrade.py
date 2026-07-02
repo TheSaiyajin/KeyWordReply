@@ -364,12 +364,10 @@ class MarketTrade(commands.Cog):
         updated_asset["bull_bias"] = round(float(profile_data["bull_bias"]), 4)
         updated_asset["profile"] = profile_name
         updated_asset["next_profile_change_ts"] = now_ts + self._profile_transition_window_seconds()
-        if profile_name in {"bullrun", "uptrend", "recovery"}:
-            updated_asset["trend"] = 1
-            updated_asset["trend_streak"] = 0
-        elif profile_name in {"crash", "downtrend"}:
-            updated_asset["trend"] = -1
-            updated_asset["trend_streak"] = 0
+        # Reset trend state on profile switch so prior long streaks do not leak into the new regime.
+        # The next tick will derive direction naturally from the new profile's bull_bias/momentum.
+        updated_asset["trend"] = 0
+        updated_asset["trend_streak"] = 0
         return updated_asset
 
     def _detect_asset_profile(self, kind: str, asset: dict) -> str:
