@@ -1274,6 +1274,7 @@ class MarketTrade(commands.Cog):
         )
 
     @market.group(name="cycle", case_insensitive=True)
+    @commands.admin_or_permissions(manage_guild=True)
     async def market_cycle(self, ctx):
         """Show market profile cycle details."""
         if ctx.invoked_subcommand is None:
