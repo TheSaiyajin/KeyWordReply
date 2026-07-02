@@ -50,9 +50,8 @@ For vote role rewards:
 - `[p]market buy <symbol> <quantity>`
 - `[p]market sell <symbol> <quantity>`
 - `[p]market portfolio [member]`
-- `[p]market interval <minutes>` (admin)
 - `[p]market tick` (admin, force immediate update)
-- `[p]market liveprices` (admin, creates one message that auto-edits every interval)
+- `[p]market liveprices` (admin, creates one message that auto-edits every minute)
 - `[p]market asset add <symbol> <crypto|stock> <starting_price> <name...>` (admin)
 - `[p]market asset remove <symbol>` (admin)
 - `[p]market asset list` (admin)

@@ -16,7 +16,7 @@ MarketTrade is a Red Discord Bot cog for simulated stock/crypto trading with Red
 
 1. Load cog: `[p]load markettrade`
 2. See commands: `[p]market help`
-3. Set update interval: `[p]market interval 5`
+3. Prices update every minute automatically
 4. Check prices: `[p]market prices`
 5. Buy assets: `[p]market buy <symbol> <qty>`
 

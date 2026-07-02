@@ -16,7 +16,7 @@ class MarketTrade(commands.Cog):
         self.config = Config.get_conf(self, identifier=219084771503, force_registration=True)
         self.config.register_guild(
             assets={},
-            update_interval_minutes=10,
+            update_interval_minutes=1,
             last_update_ts=0.0,
             seeded=False,
             prices_cache={},
@@ -38,6 +38,7 @@ class MarketTrade(commands.Cog):
         return symbol.strip().upper()
 
     def _build_default_assets(self):
+        now = time.time()
         return {
             "BTC": {
                 "name": "Bitcoin",
@@ -45,14 +46,16 @@ class MarketTrade(commands.Cog):
                 "price": 1200.0,
                 "min_price": 100.0,
                 "max_price": 100000.0,
-                "volatility": 0.08,
-                "risk": 1.2,
-                "momentum": 0.68,
-                "reversal_accel": 0.08,
-                "drift": 0.0012,
-                "bull_bias": 0.07,
+                "volatility": 0.008,
+                "risk": 1.0,
+                "momentum": 0.53,
+                "reversal_accel": 0.12,
+                "drift": 0.00008,
+                "bull_bias": 0.008,
                 "trend": 0,
                 "trend_streak": 0,
+                "profile": "uptrend",
+                "next_profile_change_ts": now + random.randint(2 * 3600, 8 * 3600),
             },
             "ETH": {
                 "name": "Ethereum",
@@ -60,14 +63,16 @@ class MarketTrade(commands.Cog):
                 "price": 700.0,
                 "min_price": 50.0,
                 "max_price": 50000.0,
-                "volatility": 0.08,
-                "risk": 1.15,
-                "momentum": 0.66,
-                "reversal_accel": 0.08,
-                "drift": 0.001,
-                "bull_bias": 0.06,
+                "volatility": 0.006,
+                "risk": 0.9,
+                "momentum": 0.50,
+                "reversal_accel": 0.14,
+                "drift": 0.00003,
+                "bull_bias": 0.002,
                 "trend": 0,
                 "trend_streak": 0,
+                "profile": "stable",
+                "next_profile_change_ts": now + random.randint(2 * 3600, 8 * 3600),
             },
             "AAPL": {
                 "name": "Apple",
@@ -75,14 +80,16 @@ class MarketTrade(commands.Cog):
                 "price": 350.0,
                 "min_price": 10.0,
                 "max_price": 10000.0,
-                "volatility": 0.05,
-                "risk": 1.0,
-                "momentum": 0.58,
-                "reversal_accel": 0.09,
-                "drift": 0.0007,
-                "bull_bias": 0.05,
+                "volatility": 0.006,
+                "risk": 0.9,
+                "momentum": 0.50,
+                "reversal_accel": 0.14,
+                "drift": 0.00003,
+                "bull_bias": 0.002,
                 "trend": 0,
                 "trend_streak": 0,
+                "profile": "stable",
+                "next_profile_change_ts": now + random.randint(2 * 3600, 8 * 3600),
             },
         }
 
@@ -283,41 +290,126 @@ class MarketTrade(commands.Cog):
                 "drift": 0.0,
                 "bull_bias": 0.0,
             },
+            "bullrun": {
+                "volatility": 0.014,
+                "risk": 1.15,
+                "momentum": 0.70,
+                "reversal_accel": 0.07,
+                "drift": 0.00018,
+                "bull_bias": 0.020,
+            },
+            "crash": {
+                "volatility": 0.020,
+                "risk": 1.35,
+                "momentum": 0.72,
+                "reversal_accel": 0.05,
+                "drift": -0.00028,
+                "bull_bias": -0.030,
+            },
+            "recovery": {
+                "volatility": 0.009,
+                "risk": 1.0,
+                "momentum": 0.58,
+                "reversal_accel": 0.10,
+                "drift": 0.00011,
+                "bull_bias": 0.012,
+            },
+            "flat": {
+                "volatility": 0.003,
+                "risk": 0.75,
+                "momentum": 0.45,
+                "reversal_accel": 0.20,
+                "drift": 0.0,
+                "bull_bias": 0.0,
+            },
         }
         return profiles.get(profile)
 
+    @staticmethod
+    def _profile_transition_window_seconds():
+        return random.randint(2 * 3600, 8 * 3600)
+
+    def _next_profile(self, current_profile: str):
+        transitions = {
+            "stable": [("stable", 55), ("uptrend", 18), ("downtrend", 16), ("swing", 7), ("flat", 2), ("bullrun", 1), ("crash", 1)],
+            "uptrend": [("uptrend", 45), ("stable", 30), ("swing", 10), ("downtrend", 8), ("bullrun", 5), ("flat", 2)],
+            "downtrend": [("downtrend", 45), ("stable", 30), ("swing", 10), ("uptrend", 8), ("crash", 5), ("flat", 2)],
+            "swing": [("swing", 45), ("stable", 25), ("uptrend", 12), ("downtrend", 12), ("wild", 4), ("flat", 2)],
+            "wild": [("wild", 40), ("swing", 25), ("stable", 15), ("uptrend", 8), ("downtrend", 8), ("bullrun", 2), ("crash", 2)],
+            "bullrun": [("uptrend", 70), ("stable", 20), ("swing", 8), ("wild", 2)],
+            "crash": [("recovery", 70), ("stable", 20), ("downtrend", 8), ("flat", 2)],
+            "recovery": [("stable", 55), ("uptrend", 30), ("swing", 10), ("flat", 5)],
+            "flat": [("stable", 60), ("uptrend", 15), ("downtrend", 15), ("swing", 8), ("wild", 2)],
+        }
+        options = transitions.get(current_profile, transitions["stable"])
+        roll = random.uniform(0.0, sum(weight for _, weight in options))
+        running = 0.0
+        for name, weight in options:
+            running += weight
+            if roll <= running:
+                return name
+        return options[-1][0]
+
+    def _apply_profile_to_asset(self, asset: dict, profile_name: str, now_ts: float):
+        kind = str(asset.get("kind", "stock")).strip().lower()
+        profile_data = self._behavior_profile(kind, profile_name)
+        if profile_data is None:
+            return dict(asset)
+
+        updated_asset = dict(asset)
+        updated_asset["volatility"] = round(float(profile_data["volatility"]), 4)
+        updated_asset["risk"] = round(float(profile_data["risk"]), 2)
+        updated_asset["momentum"] = round(float(profile_data["momentum"]), 4)
+        updated_asset["reversal_accel"] = round(float(profile_data["reversal_accel"]), 4)
+        updated_asset["drift"] = round(float(profile_data["drift"]), 5)
+        updated_asset["bull_bias"] = round(float(profile_data["bull_bias"]), 4)
+        updated_asset["profile"] = profile_name
+        updated_asset["next_profile_change_ts"] = now_ts + self._profile_transition_window_seconds()
+        if profile_name in {"bullrun", "uptrend", "recovery"}:
+            updated_asset["trend"] = 1
+            updated_asset["trend_streak"] = 0
+        elif profile_name in {"crash", "downtrend"}:
+            updated_asset["trend"] = -1
+            updated_asset["trend_streak"] = 0
+        return updated_asset
+
     def _detect_asset_profile(self, kind: str, asset: dict) -> str:
-       """Detect which profile an asset matches, or return 'custom' if none match."""
-       asset_volatility = round(float(asset.get("volatility", 0.0)), 4)
-       asset_risk = round(float(asset.get("risk", 1.0)), 2)
-       asset_momentum = round(float(asset.get("momentum", 0.6)), 4)
-       asset_reversal_accel = round(float(asset.get("reversal_accel", 0.08)), 4)
-       asset_drift = round(float(asset.get("drift", 0.0)), 4)
-       asset_bull_bias = round(float(asset.get("bull_bias", 0.05)), 4)
+        """Detect which profile an asset matches, or return 'custom' if none match."""
+        explicit_profile = str(asset.get("profile", "")).strip().lower()
+        if explicit_profile in {
+            "stable", "wild", "uptrend", "downtrend", "swing", "bullrun", "crash", "recovery", "flat", "custom"
+        }:
+            return explicit_profile
+        asset_volatility = round(float(asset.get("volatility", 0.0)), 4)
+        asset_risk = round(float(asset.get("risk", 1.0)), 2)
+        asset_momentum = round(float(asset.get("momentum", 0.6)), 4)
+        asset_reversal_accel = round(float(asset.get("reversal_accel", 0.08)), 4)
+        asset_drift = round(float(asset.get("drift", 0.0)), 5)
+        asset_bull_bias = round(float(asset.get("bull_bias", 0.05)), 4)
 
-       for profile_name in ["stable", "wild", "uptrend", "downtrend", "swing"]:
-           profile_data = self._behavior_profile(kind, profile_name)
-           if profile_data is None:
-               continue
+        for profile_name in ["stable", "wild", "uptrend", "downtrend", "swing", "bullrun", "crash", "recovery", "flat"]:
+            profile_data = self._behavior_profile(kind, profile_name)
+            if profile_data is None:
+                continue
 
-           prof_volatility = round(float(profile_data.get("volatility", 0.0)), 4)
-           prof_risk = round(float(profile_data.get("risk", 1.0)), 2)
-           prof_momentum = round(float(profile_data.get("momentum", 0.6)), 4)
-           prof_reversal_accel = round(float(profile_data.get("reversal_accel", 0.08)), 4)
-           prof_drift = round(float(profile_data.get("drift", 0.0)), 4)
-           prof_bull_bias = round(float(profile_data.get("bull_bias", 0.05)), 4)
+            prof_volatility = round(float(profile_data.get("volatility", 0.0)), 4)
+            prof_risk = round(float(profile_data.get("risk", 1.0)), 2)
+            prof_momentum = round(float(profile_data.get("momentum", 0.6)), 4)
+            prof_reversal_accel = round(float(profile_data.get("reversal_accel", 0.08)), 4)
+            prof_drift = round(float(profile_data.get("drift", 0.0)), 5)
+            prof_bull_bias = round(float(profile_data.get("bull_bias", 0.05)), 4)
 
-           if (
-               asset_volatility == prof_volatility
-               and asset_risk == prof_risk
-               and asset_momentum == prof_momentum
-               and asset_reversal_accel == prof_reversal_accel
-               and asset_drift == prof_drift
-               and asset_bull_bias == prof_bull_bias
-           ):
-               return profile_name
+            if (
+                asset_volatility == prof_volatility
+                and asset_risk == prof_risk
+                and asset_momentum == prof_momentum
+                and asset_reversal_accel == prof_reversal_accel
+                and asset_drift == prof_drift
+                and asset_bull_bias == prof_bull_bias
+            ):
+                return profile_name
 
-       return "custom"
+        return "custom"
 
     async def _process_auto_orders_debug(self, guild_id: int):
         """Debug version of _process_auto_orders that returns detailed info."""
@@ -568,7 +660,22 @@ class MarketTrade(commands.Cog):
 
         updated_assets = {}
         ended_events = []
+        profile_transitions = []
+        now_ts = time.time()
         for symbol, asset in assets.items():
+            working_asset = dict(asset)
+            current_profile = self._detect_asset_profile(str(working_asset.get("kind", "stock")).strip().lower(), working_asset)
+            if current_profile != "custom":
+                if not float(working_asset.get("next_profile_change_ts", 0.0)):
+                    working_asset["next_profile_change_ts"] = now_ts + self._profile_transition_window_seconds()
+                    if "profile" not in working_asset:
+                        working_asset["profile"] = current_profile
+                elif now_ts >= float(working_asset.get("next_profile_change_ts", 0.0)):
+                    next_profile = self._next_profile(current_profile)
+                    if next_profile != current_profile:
+                        profile_transitions.append((symbol, current_profile, next_profile))
+                    working_asset = self._apply_profile_to_asset(working_asset, next_profile, now_ts)
+
             event_data = active_events.get(symbol)
             event_change = 0.0
             event_remaining_ticks = 0
@@ -576,17 +683,17 @@ class MarketTrade(commands.Cog):
                 event_change = float(event_data.get("change_per_tick", 0.0))
                 event_remaining_ticks = max(0, int(event_data.get("remaining_ticks", 0)))
 
-            current_price = float(asset["price"])
-            volatility = float(asset.get("volatility", 0.08))
-            risk = max(0.2, float(asset.get("risk", 1.0)))
-            momentum = min(0.95, max(0.05, float(asset.get("momentum", 0.6))))
-            reversal_accel = min(0.5, max(0.01, float(asset.get("reversal_accel", 0.08))))
-            drift = min(0.2, max(-0.2, float(asset.get("drift", 0.0))))
-            bull_bias = min(0.4, max(-0.4, float(asset.get("bull_bias", 0.05))))
-            min_price = max(1.0, float(asset.get("min_price", 1.0)))
-            max_price = max(min_price, float(asset.get("max_price", min_price)))
-            trend = int(asset.get("trend", 0))
-            trend_streak = max(0, int(asset.get("trend_streak", 0)))
+            current_price = float(working_asset["price"])
+            volatility = float(working_asset.get("volatility", 0.08))
+            risk = max(0.2, float(working_asset.get("risk", 1.0)))
+            momentum = min(0.95, max(0.05, float(working_asset.get("momentum", 0.6))))
+            reversal_accel = min(0.5, max(0.01, float(working_asset.get("reversal_accel", 0.08))))
+            drift = min(0.2, max(-0.2, float(working_asset.get("drift", 0.0))))
+            bull_bias = min(0.4, max(-0.4, float(working_asset.get("bull_bias", 0.05))))
+            min_price = max(1.0, float(working_asset.get("min_price", 1.0)))
+            max_price = max(min_price, float(working_asset.get("max_price", min_price)))
+            trend = int(working_asset.get("trend", 0))
+            trend_streak = max(0, int(working_asset.get("trend_streak", 0)))
 
             if trend == 0:
                 trend = 1 if random.random() < (0.5 + (bull_bias / 2.0)) else -1
@@ -615,7 +722,7 @@ class MarketTrade(commands.Cog):
             new_price = current_price * (1.0 + change)
             clamped_price = max(min_price, min(max_price, new_price))
 
-            updated_asset = dict(asset)
+            updated_asset = dict(working_asset)
             updated_asset["price"] = round(clamped_price, 2)
             if clamped_price in (min_price, max_price):
                 updated_asset["trend"] = trend * -1
@@ -643,23 +750,26 @@ class MarketTrade(commands.Cog):
                 guild_id,
                 "Event ended for: " + ", ".join(f"`{symbol}`" for symbol in sorted(ended_events)) + ".",
             )
+        if profile_transitions:
+            change_lines = [
+                f"`{symbol}`: `{old_profile}` -> `{new_profile}`"
+                for symbol, old_profile, new_profile in profile_transitions[:12]
+            ]
+            await self._announce_event_message(
+                guild_id,
+                "Market profile shifts:\n" + "\n".join(change_lines),
+            )
 
     @tasks.loop(minutes=1)
     async def price_updater(self):
         all_guilds = await self.config.all_guilds()
-        now = time.time()
 
         for guild_id, data in all_guilds.items():
             try:
-                interval_minutes = int(data.get("update_interval_minutes", 10))
-                last_update_ts = float(data.get("last_update_ts", 0.0))
-                time_since_update = now - last_update_ts
-                
-                if time_since_update >= interval_minutes * 60:
-                    parsed_guild_id = int(guild_id)
-                    await self._process_auto_orders(parsed_guild_id)
-                    await self._update_guild_prices(parsed_guild_id)
-                    await self._update_live_prices_message(parsed_guild_id)
+                parsed_guild_id = int(guild_id)
+                await self._process_auto_orders(parsed_guild_id)
+                await self._update_guild_prices(parsed_guild_id)
+                await self._update_live_prices_message(parsed_guild_id)
             except Exception as e:
                 print(f"Error in price_updater for guild {guild_id}: {e}")
                 import traceback
@@ -730,7 +840,7 @@ class MarketTrade(commands.Cog):
            name="**Behavior Profiles** (Admin)",
            value="`asset setprofile <symbol> <profile>` - Set behavior profile\n"
                  "`asset profiles` - List available profiles\n"
-                 "Profiles: `stable`, `wild`, `uptrend`, `downtrend`, `swing`",
+                 "Profiles: `stable`, `uptrend`, `downtrend`, `swing`, `wild`, `bullrun`, `crash`, `recovery`, `flat`",
            inline=False
        )
 
@@ -739,7 +849,6 @@ class MarketTrade(commands.Cog):
            name="**Price Control** (Admin)",
            value="`setdrift <value>` - Set baseline price change (-0.2 to 0.2)\n"
                  "`setbullbias <value>` - Set uptrend preference (-0.4 to 0.4)\n"
-                 "`interval <minutes>` - Set price update interval (1-1440)\n"
                  "`tick` - Manually trigger 1 price update\n"
                  "`ticks <count>` - Run many price updates at once (testing)",
            inline=False
@@ -1235,17 +1344,6 @@ class MarketTrade(commands.Cog):
             f"Change: {humanize_number(round(change, 2))} ({round(change_percent, 2)}%) [{direction}]"
         )
 
-    @market.command(name="interval")
-    @commands.admin_or_permissions(manage_guild=True)
-    async def market_interval(self, ctx, minutes: int):
-        """Set automatic price update interval in minutes."""
-        if minutes < 1 or minutes > 1440:
-            await ctx.send("Interval must be between 1 and 1440 minutes.")
-            return
-
-        await self.config.guild(ctx.guild).update_interval_minutes.set(minutes)
-        await ctx.send(f"Price update interval set to {minutes} minute(s).")
-
     @market.command(name="tick")
     @commands.admin_or_permissions(manage_guild=True)
     async def market_tick(self, ctx):
@@ -1315,18 +1413,17 @@ class MarketTrade(commands.Cog):
         """Show debug info about price update timing."""
         import time
         guild_conf = self.config.guild(ctx.guild)
-        interval_minutes = await guild_conf.update_interval_minutes()
         last_update_ts = await guild_conf.last_update_ts()
         now = time.time()
         time_since = now - last_update_ts
         
         await ctx.send(
             f"**Update Debug Info:**\n"
-            f"Interval: {interval_minutes} minutes ({interval_minutes * 60} seconds)\n"
+            f"Interval: 1 minute (60 seconds)\n"
             f"Last update: {last_update_ts}\n"
             f"Now: {now}\n"
             f"Time since last update: {time_since:.1f} seconds\n"
-            f"Ready for update: {time_since >= interval_minutes * 60}"
+            f"Ready for update: {time_since >= 60}"
         )
 
     @market.command(name="ordersdebug")
@@ -1533,7 +1630,7 @@ class MarketTrade(commands.Cog):
     @market.command(name="liveprices")
     @commands.admin_or_permissions(manage_guild=True)
     async def market_liveprices(self, ctx):
-        """Post a live prices message that auto-updates every market interval."""
+        """Post a live prices message that auto-updates every minute."""
         assets = await self._get_assets(ctx.guild)
         if not assets:
             await ctx.send("No assets configured yet.")
@@ -1545,7 +1642,7 @@ class MarketTrade(commands.Cog):
         await self.config.guild(ctx.guild).live_prices_message.set(
             {"channel_id": ctx.channel.id, "message_id": live_message.id}
         )
-        await ctx.send("Live prices message created. I will update it every market interval.")
+        await ctx.send("Live prices message created. I will update it every minute.")
 
     @market.group(name="event", case_insensitive=True)
     @commands.admin_or_permissions(manage_guild=True)
@@ -1699,7 +1796,7 @@ class MarketTrade(commands.Cog):
 
         min_price = max(1.0, round(starting_price * 0.05, 2))
         max_price = round(starting_price * 20, 2)
-        defaults = self._default_asset_behavior(normalized_kind)
+        defaults = self._behavior_profile(normalized_kind, "stable")
 
         async with self.config.guild(ctx.guild).assets() as assets:
             if normalized_symbol in assets:
@@ -1720,6 +1817,8 @@ class MarketTrade(commands.Cog):
                 "bull_bias": defaults["bull_bias"],
                 "trend": 0,
                 "trend_streak": 0,
+                "profile": "stable",
+                "next_profile_change_ts": time.time() + self._profile_transition_window_seconds(),
             }
 
         await ctx.send(
@@ -1773,7 +1872,7 @@ class MarketTrade(commands.Cog):
     async def market_asset_profiles(self, ctx):
         """Show available behavior profiles for setprofile."""
         await ctx.send(
-            "Available profiles: `stable`, `wild`, `uptrend`, `downtrend`, `swing`.\n"
+            "Available profiles: `stable`, `uptrend`, `downtrend`, `swing`, `wild`, `bullrun`, `crash`, `recovery`, `flat`.\n"
             "Use: `market asset setprofile <symbol> <profile>`"
         )
 
@@ -1820,6 +1919,13 @@ class MarketTrade(commands.Cog):
         profile_aliases = {
             "wilder": "wild",
             "volatile": "wild",
+            "bull": "bullrun",
+            "run": "bullrun",
+            "bull-run": "bullrun",
+            "dump": "crash",
+            "panic": "crash",
+            "recover": "recovery",
+            "sideways": "flat",
             "up": "uptrend",
             "ups": "uptrend",
             "dip": "downtrend",
@@ -1838,7 +1944,7 @@ class MarketTrade(commands.Cog):
             selected = self._behavior_profile(kind, normalized_profile)
             if selected is None:
                 await ctx.send(
-                    "Unknown profile. Use one of: `stable`, `wild`, `uptrend`, `downtrend`, `swing`."
+                    "Unknown profile. Use one of: `stable`, `uptrend`, `downtrend`, `swing`, `wild`, `bullrun`, `crash`, `recovery`, `flat`."
                 )
                 return
 
@@ -1846,8 +1952,10 @@ class MarketTrade(commands.Cog):
             asset["risk"] = round(float(selected["risk"]), 2)
             asset["momentum"] = round(float(selected["momentum"]), 4)
             asset["reversal_accel"] = round(float(selected["reversal_accel"]), 4)
-            asset["drift"] = round(float(selected["drift"]), 4)
+            asset["drift"] = round(float(selected["drift"]), 5)
             asset["bull_bias"] = round(float(selected["bull_bias"]), 4)
+            asset["profile"] = normalized_profile
+            asset["next_profile_change_ts"] = time.time() + self._profile_transition_window_seconds()
             assets[normalized_symbol] = asset
 
         await ctx.send(
@@ -1964,6 +2072,8 @@ class MarketTrade(commands.Cog):
                 await ctx.send(f"`{normalized_symbol}` does not exist.")
                 return
             asset["volatility"] = round(percent / 100, 4)
+            asset["profile"] = "custom"
+            asset["next_profile_change_ts"] = 0
             assets[normalized_symbol] = asset
 
         await ctx.send(f"`{normalized_symbol}` volatility set to {round(percent, 2)}%.")
@@ -1983,6 +2093,8 @@ class MarketTrade(commands.Cog):
                 await ctx.send(f"`{normalized_symbol}` does not exist.")
                 return
             asset["risk"] = round(risk, 2)
+            asset["profile"] = "custom"
+            asset["next_profile_change_ts"] = 0
             assets[normalized_symbol] = asset
 
         await ctx.send(f"`{normalized_symbol}` risk set to {round(risk, 2)}x.")
@@ -2002,6 +2114,8 @@ class MarketTrade(commands.Cog):
                 await ctx.send(f"`{normalized_symbol}` does not exist.")
                 return
             asset["momentum"] = round(percent / 100, 4)
+            asset["profile"] = "custom"
+            asset["next_profile_change_ts"] = 0
             assets[normalized_symbol] = asset
 
         await ctx.send(f"`{normalized_symbol}` momentum set to {round(percent, 2)}%.")
@@ -2021,6 +2135,8 @@ class MarketTrade(commands.Cog):
                 await ctx.send(f"`{normalized_symbol}` does not exist.")
                 return
             asset["drift"] = round(percent / 100, 4)
+            asset["profile"] = "custom"
+            asset["next_profile_change_ts"] = 0
             assets[normalized_symbol] = asset
 
         await ctx.send(f"`{normalized_symbol}` drift set to {round(percent, 2)}% per update.")
@@ -2040,6 +2156,8 @@ class MarketTrade(commands.Cog):
                 await ctx.send(f"`{normalized_symbol}` does not exist.")
                 return
             asset["bull_bias"] = round(percent / 100, 4)
+            asset["profile"] = "custom"
+            asset["next_profile_change_ts"] = 0
             assets[normalized_symbol] = asset
 
         await ctx.send(f"`{normalized_symbol}` bull bias set to {round(percent, 2)}%.")
