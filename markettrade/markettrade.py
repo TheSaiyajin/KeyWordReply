@@ -6,7 +6,7 @@ import discord
 from redbot.core import Config, bank, commands
 from redbot.core.utils.chat_formatting import humanize_number
 from discord.ext import tasks
-from .events import format_event_line, roll_random_event
+from .events import roll_random_event
 from .profiles import (
     behavior_profile,
     detect_asset_profile,
@@ -140,7 +140,7 @@ class MarketTrade(commands.Cog):
 
     @staticmethod
     def _format_event_line(event_data):
-        return format_event_line(event_data)
+        return "⚡"
 
     def _build_prices_text(self, assets, active_events=None):
         active_events = active_events or {}
@@ -510,15 +510,14 @@ class MarketTrade(commands.Cog):
                 active_events, assets, random_event_chance_percent
             )
         if random_event_started is not None:
-            started_symbol, started_event_data = random_event_started
+            started_symbol, _started_event_data = random_event_started
             await self._announce_event_message(
                 guild_id,
-                f"Random event started for `{started_symbol}`: {self._format_event_line(started_event_data)}.",
+                f"An event is now happening for `{started_symbol}`.",
             )
 
         updated_assets = {}
         ended_events = []
-        profile_transitions = []
         now_ts = time.time()
         for symbol, asset in assets.items():
             working_asset = dict(asset)
@@ -530,8 +529,6 @@ class MarketTrade(commands.Cog):
                         working_asset["profile"] = current_profile
                 elif now_ts >= float(working_asset.get("next_profile_change_ts", 0.0)):
                     next_profile = self._next_profile(current_profile)
-                    if next_profile != current_profile:
-                        profile_transitions.append((symbol, current_profile, next_profile))
                     working_asset = self._apply_profile_to_asset(working_asset, next_profile, now_ts)
 
             event_data = active_events.get(symbol)
@@ -607,15 +604,6 @@ class MarketTrade(commands.Cog):
             await self._announce_event_message(
                 guild_id,
                 "Event ended for: " + ", ".join(f"`{symbol}`" for symbol in sorted(ended_events)) + ".",
-            )
-        if profile_transitions:
-            change_lines = [
-                f"`{symbol}`: `{old_profile}` -> `{new_profile}`"
-                for symbol, old_profile, new_profile in profile_transitions[:12]
-            ]
-            await self._announce_event_message(
-                guild_id,
-                "Market profile shifts:\n" + "\n".join(change_lines),
             )
 
     @tasks.loop(minutes=1)
@@ -1639,7 +1627,7 @@ class MarketTrade(commands.Cog):
         )
         await self._announce_event_message(
             ctx.guild.id,
-            f"Manual event started for `{normalized_symbol}`: {round(percent_per_tick, 2)}% per tick for {ticks} tick(s).",
+            f"An event is now happening for `{normalized_symbol}`.",
         )
 
     @market_event.command(name="clear")
