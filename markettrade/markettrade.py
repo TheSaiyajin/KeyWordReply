@@ -16,7 +16,6 @@ class MarketTrade(commands.Cog):
         self.config = Config.get_conf(self, identifier=219084771503, force_registration=True)
         self.config.register_guild(
             assets={},
-            update_interval_minutes=1,
             last_update_ts=0.0,
             seeded=False,
             prices_cache={},
@@ -24,7 +23,7 @@ class MarketTrade(commands.Cog):
             price_history={},
             active_events={},
             random_events_enabled=True,
-            random_event_chance_percent=6.0,
+            random_event_chance_percent=0.3,
             event_announce_channel_id=0,
         )
         self.config.register_member(holdings={}, cost_basis={}, realized_profit={}, auto_orders={})
