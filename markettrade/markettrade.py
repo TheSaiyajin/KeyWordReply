@@ -43,6 +43,22 @@ class MarketTrade(commands.Cog):
     def _normalize_symbol(symbol: str) -> str:
         return symbol.strip().upper()
 
+    @staticmethod
+    def _profile_display_name(profile: str) -> str:
+        mapping = {
+            "stable": "Stable",
+            "uptrend": "Uptrend",
+            "downtrend": "Downtrend",
+            "swing": "Swing",
+            "wild": "Wild",
+            "bullrun": "Bull Run",
+            "crash": "Crash",
+            "recovery": "Recovery",
+            "flat": "Flat",
+            "custom": "Custom",
+        }
+        return mapping.get(str(profile).strip().lower(), str(profile).strip().title())
+
     def _build_default_assets(self):
         now = time.time()
         return {
@@ -518,6 +534,7 @@ class MarketTrade(commands.Cog):
 
         updated_assets = {}
         ended_events = []
+        profile_transitions = []
         now_ts = time.time()
         for symbol, asset in assets.items():
             working_asset = dict(asset)
@@ -529,7 +546,12 @@ class MarketTrade(commands.Cog):
                         working_asset["profile"] = current_profile
                 elif now_ts >= float(working_asset.get("next_profile_change_ts", 0.0)):
                     next_profile = self._next_profile(current_profile)
-                    working_asset = self._apply_profile_to_asset(working_asset, next_profile, now_ts)
+                    if next_profile != current_profile:
+                        working_asset = self._apply_profile_to_asset(working_asset, next_profile, now_ts)
+                        profile_transitions.append((symbol, current_profile, next_profile))
+                    else:
+                        working_asset["profile"] = current_profile
+                        working_asset["next_profile_change_ts"] = now_ts + self._profile_transition_window_seconds()
 
             event_data = active_events.get(symbol)
             event_change = 0.0
@@ -604,6 +626,15 @@ class MarketTrade(commands.Cog):
             await self._announce_event_message(
                 guild_id,
                 "Event ended for: " + ", ".join(f"`{symbol}`" for symbol in sorted(ended_events)) + ".",
+            )
+        if profile_transitions:
+            lines = [
+                f"{symbol}: {self._profile_display_name(old_profile)} → {self._profile_display_name(new_profile)}"
+                for symbol, old_profile, new_profile in profile_transitions[:20]
+            ]
+            await self._announce_event_message(
+                guild_id,
+                "📈 Market Profile Changes\n\n" + "\n".join(lines),
             )
 
     @tasks.loop(minutes=1)
